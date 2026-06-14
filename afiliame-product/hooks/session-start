@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# SessionStart hook for the afiliame-product overlay plugin.
+#
+# Injects the Afiliame product context and the Linear-first persistence rule
+# so that, in an Afiliame session, feature specs and tasks live in Linear
+# (team Afiliame) instead of local docs/specs or memory files.
+#
+# Dependency-free: pure bash + printf. No jq, no python. Uses printf rather
+# than a heredoc to avoid the bash 5.3+ heredoc hang.
+# See: https://github.com/obra/superpowers/issues/571
+
+set -euo pipefail
+
+# Resolve plugin root from this script's location (works regardless of CWD).
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# Pull a short summary out of the durable context file if present.
+context_file="${PLUGIN_ROOT}/context/afiliame.md"
+if [ -f "$context_file" ]; then
+    context_summary="$(cat "$context_file")"
+else
+    context_summary="Afiliame: multi-tenant SaaS for managing affiliate programs (Brazilian market: pt-BR, BRL, CNPJ, PIX). Early-stage; focus is feature discovery and roadmap."
+fi
+
+# Escape a string for safe embedding inside a JSON string literal.
+# Each ${s//old/new} is a single C-level pass — fast and dependency-free.
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+context_summary_escaped="$(escape_for_json "$context_summary")"
+
+session_context="<EXTREMELY_IMPORTANT>\nYou are working in the **Afiliame** product context.\n\n**Persistence rule (this overrides the default local-file workflow):** Feature specs and tasks persist to **Linear (team Afiliame)**, NOT to local docs/specs, plan files, or memory files. Linear is the durable source of truth; any local spec/plan is an ephemeral cache.\n\n**Which skill to use:**\n- New feature idea or problem space → use the 'afiliame-product:brainstorming-to-linear' skill.\n- Follow-up on an existing feature, or the user references an existing Linear issue → use the 'afiliame-product:linear-feature-context' skill.\n- Ready to implement a refined feature whose tasks already live in Linear → use the 'afiliame-product:dispatching-from-linear' skill.\n\n**Division of labor:** Superpowers still governs *how* you build — TDD, systematic debugging, writing plans, git worktrees, parallel agents. This plugin only changes *where the spec and tasks live* (Linear, not local files) and adds a Linear↔worktree bridge. Use both together.\n\n**Product context (see context/afiliame.md):**\n${context_summary_escaped}\n</EXTREMELY_IMPORTANT>"
+
+# Emit only the field the current platform consumes (Claude Code reads both
+# additional_context and hookSpecificOutput without deduplication).
+if [ -n "${CURSOR_PLUGIN_ROOT:-}" ]; then
+  printf '{\n  "additional_context": "%s"\n}\n' "$session_context"
+elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -z "${COPILOT_CLI:-}" ]; then
+  printf '{\n  "hookSpecificOutput": {\n    "hookEventName": "SessionStart",\n    "additionalContext": "%s"\n  }\n}\n' "$session_context"
+else
+  printf '{\n  "additionalContext": "%s"\n}\n' "$session_context"
+fi
+
+exit 0
