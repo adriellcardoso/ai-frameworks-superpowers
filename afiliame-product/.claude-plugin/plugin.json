@@ -1,0 +1,15 @@
+{
+  "name": "afiliame-product",
+  "description": "Afiliame product agent: Linear-backed brainstorming, feature refinement, and worktree dispatch. Composes superpowers.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Adriel"
+  },
+  "keywords": [
+    "linear",
+    "product",
+    "affiliate",
+    "superpowers",
+    "brainstorming"
+  ]
+}
